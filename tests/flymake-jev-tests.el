@@ -119,8 +119,12 @@ happened until the timers have run."
   (reverse flymake-jev-tests--reports))
 
 (defun flymake-jev-tests--texts (reports)
-  "Return the text of every diagnostic in REPORTS."
-  (mapcar #'flymake-diagnostic-text
+  "Return the text of every diagnostic in REPORTS.
+
+Trimmed: Flymake on Emacs 31 reads a plain-string message back out
+with room in front of it for the origin and code it has not got."
+  (mapcar (lambda (diagnostic)
+            (string-trim (flymake-diagnostic-text diagnostic)))
           (apply #'append (mapcar (lambda (report)
                                     (and (listp (car report)) (car report)))
                                   reports))))
@@ -289,7 +293,8 @@ happened until the timers have run."
       (let* ((reports (flymake-jev-tests--run))
              (diagnostic (car (apply #'append (mapcar #'car (cdr reports))))))
         (should (eq (flymake-diagnostic-type diagnostic) :note))
-        (should (equal (flymake-diagnostic-text diagnostic) "jargon (0.90): Undefined jargon"))
+        (should (equal (string-trim (flymake-diagnostic-text diagnostic))
+                       "jargon (0.90): Undefined jargon"))
         (should (eq (plist-get (flymake-jev-diagnostic-data diagnostic) :rule) 'jargon))))))
 
 (ert-deftest flymake-jev-test-an-answer-is-reported-for-its-own-region ()
@@ -515,12 +520,19 @@ happened until the timers have run."
         (delete-file flymake-jev-labels-file)))))
 
 (ert-deftest flymake-jev-test-the-language-is-named-without-a-mode-line ()
-  "`mode-name\=' formats to nothing where no mode line exists."
+  "`mode-name\=' is a mode-line construct, and not always a name.
+
+Emacs 27 calls Emacs Lisp \"Emacs-Lisp\" in a plain string, later
+Emacsen call it \"Elisp\" in a construct with an `:eval\=' inside,
+and neither formats to anything at all in batch.  Both branches
+are checked for what they do, not for what one Emacs spells."
   (with-temp-buffer
     (emacs-lisp-mode)
+    ;; A construct rather than a name: the mode names itself.
+    (setq mode-name '("Elisp" (lexical-binding "/l" "/d")))
     (should (equal (flymake-jev--language) "emacs-lisp")))
   (with-temp-buffer
-    (prog-mode)
+    (emacs-lisp-mode)
     (setq mode-name "Python")
     (should (equal (flymake-jev--language) "Python")))
   (with-temp-buffer
